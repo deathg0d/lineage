@@ -126,7 +126,7 @@ try {
 
 To achieve performance and correctness in the JavaScript runtime, this library requires developers to understand a few systemic rules.
 
-### 1. The "Honest" Primitive Rule (`T extends object`)
+### 1. The "Honest" Primitive Rule
 JavaScript operators (`+`, `-`, `===`) immediately strip metadata from primitive values. If we allowed you to track a raw `number`, we would have to box it into a `new Number()`, which breaks `===` equality, JSON serialization, and causes silent pipeline drops.
 
 Therefore, **primitives cannot be directly tracked**. You must wrap them in an object at your system boundary:
@@ -138,14 +138,13 @@ const price = track(42.50, "api");
 const price = track({ value: 42.50 }, "api");
 ```
 
-### 2. Frozen Objects
-Because lineage tracking uses `Object.defineProperty` to attach a hidden `Symbol`, passing a frozen object (`Object.freeze()`) to `track()` cannot mutate it in place. 
-Instead, `track` safely returns a **cloned copy** with an identical prototype chain. Make sure to use the returned value:
+### 2. Zero-Mutation via `WeakMap`
+`data-lineage` uses a global `WeakMap` to store object IDs invisibly. This means **your objects are never mutated**.
+You can safely pass `Object.freeze(myConfig)` into `track()` and it will work natively without throwing errors or requiring cloned copies.
+
 ```typescript
 const frozen = Object.freeze({ key: "abc" });
-const tracked = track(frozen, "env");
-
-console.log(frozen === tracked); // FALSE! Use `tracked` going forward.
+track(frozen, "env"); // Works perfectly, zero mutation.
 ```
 
 ### 3. `wrapFunction` Traces Boundaries, Not Internals

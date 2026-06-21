@@ -2,6 +2,7 @@ import { LineageNode, NodeId } from "./types";
 
 const nodeStore = new Map<NodeId, LineageNode>();
 const refCount = new Map<NodeId, number>();
+export const trackingMap = new WeakMap<object, NodeId>();
 
 export function registerNode(node: LineageNode): void {
   nodeStore.set(node.id, node);
@@ -18,7 +19,8 @@ export function lookupNode(id: NodeId): LineageNode | undefined {
 function cascadeEvict(startId: NodeId): void {
   const queue: NodeId[] = [startId];
   while (queue.length > 0) {
-    const id = queue.shift()!;
+    // Replaced shift() with pop() for O(1) array removal
+    const id = queue.pop()!;
     if (!nodeStore.has(id)) continue;
     const count = refCount.get(id) ?? 0;
     if (count > 0) continue;
@@ -42,6 +44,7 @@ const registry = new FinalizationRegistry((id: NodeId) => {
 });
 
 export function registerTracked(value: object, id: NodeId): void {
+  trackingMap.set(value, id);
   registry.register(value, id);
 }
 
@@ -58,4 +61,5 @@ export function evictBefore(timestamp: number): void {
 export function clearAll(): void {
   nodeStore.clear();
   refCount.clear();
+  // WeakMap doesn't need (or support) clear()
 }

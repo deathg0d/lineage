@@ -1,5 +1,3 @@
-export const LINEAGE_SYMBOL = Symbol("lineage");
-
 export type NodeId = string;
 
 export interface LineageNode {
@@ -10,12 +8,6 @@ export interface LineageNode {
   timestamp: number;
   valueSnapshot?: unknown;
 }
-
-export interface LineageRef {
-  [LINEAGE_SYMBOL]: NodeId;
-}
-
-export type Tracked<T> = T extends object ? T & LineageRef : never;
 
 export function uuid(): NodeId {
   return globalThis.crypto.randomUUID();

@@ -1,9 +1,9 @@
-import { LINEAGE_SYMBOL, LineageNode, LineageRef, NodeId, uuid } from "./types";
-import { registerNode, lookupNode, registerTracked } from "./store";
+import { LineageNode, NodeId, uuid } from "./types";
+import { registerNode, lookupNode, registerTracked, trackingMap } from "./store";
 
 function getNodeId(val: unknown): NodeId | undefined {
-  if (val !== null && typeof val === "object" && LINEAGE_SYMBOL in val) {
-    return (val as LineageRef)[LINEAGE_SYMBOL];
+  if (val !== null && typeof val === "object") {
+    return trackingMap.get(val);
   }
   return undefined;
 }
@@ -11,13 +11,18 @@ function getNodeId(val: unknown): NodeId | undefined {
 function snapshot(value: unknown): unknown {
   if (value === null || typeof value !== "object") return value;
   if (Array.isArray(value)) {
-    const sliced = value.slice(0, 5);
-    return value.length > 5 ? [...sliced, `...(${value.length - 5} more)`] : sliced;
+    return value.length > 5
+      ? [...value.slice(0, 5), `...(${value.length - 5} more)`]
+      : value.slice();
   }
   try {
     const name = value.constructor?.name;
-    const spread = { ...value };
-    return name && name !== "Object" ? { __type: name, ...spread } : spread;
+    const keys = Object.keys(value);
+    const limited = keys.slice(0, 10);
+    const result: Record<string, unknown> = {};
+    for (const k of limited) result[k] = (value as any)[k];
+    if (keys.length > 10) result["__truncated"] = `...(${keys.length - 10} more properties)`;
+    return name && name !== "Object" ? { __type: name, ...result } : result;
   } catch {
     return "[unsnapshotable]";
   }
@@ -29,23 +34,6 @@ function safeStringify(val: unknown): string {
   } catch {
     return '"[circular]"';
   }
-}
-
-function attachRef<T extends object>(value: T, id: NodeId): T {
-  if (Object.isFrozen(value)) {
-    return Object.defineProperty(
-      Object.create(Object.getPrototypeOf(value), Object.getOwnPropertyDescriptors(value)),
-      LINEAGE_SYMBOL,
-      { value: id, enumerable: false, writable: false, configurable: true }
-    ) as T;
-  }
-  Object.defineProperty(value, LINEAGE_SYMBOL, {
-    value: id,
-    enumerable: false,
-    writable: false,
-    configurable: true,
-  });
-  return value;
 }
 
 function makeNode(
@@ -67,9 +55,8 @@ function makeNode(
 export function track<T extends object>(value: T, sourceName: string): T {
   const node = makeNode(sourceName, [], undefined, snapshot(value));
   registerNode(node);
-  const tracked = attachRef(value, node.id);
-  registerTracked(tracked, node.id);
-  return tracked;
+  registerTracked(value, node.id);
+  return value;
 }
 
 export function transform<T extends object>(
@@ -83,9 +70,8 @@ export function transform<T extends object>(
 
   const node = makeNode("transform", parentIds, operationName, snapshot(output));
   registerNode(node);
-  const tracked = attachRef(output, node.id);
-  registerTracked(tracked, node.id);
-  return tracked;
+  registerTracked(output, node.id);
+  return output;
 }
 
 export function wrapFunction<Args extends unknown[], R extends object>(

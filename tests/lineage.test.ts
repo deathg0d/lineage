@@ -27,4 +27,14 @@ console.log(`Value: ${withTax.value}`);
 console.log(printLineage(withTax));
 console.log("\n");
 
+// Test 3: Frozen objects with WeakMap
+const frozenObj = Object.freeze({ key: "frozenValue" });
+const trackedFrozen = track(frozenObj, "frozenSource");
+
+console.log("--- Frozen Object Result ---");
+console.log(`Is same instance: ${frozenObj === trackedFrozen}`);
+console.log(printLineage(trackedFrozen));
+console.log("\n");
+
+
 console.log("All tests passed! (FinalizationRegistry will clean up silently when process exits)");
