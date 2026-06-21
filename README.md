@@ -64,17 +64,45 @@ console.log(printLineage(tax));
 
 ### 3. Wrapping Functions
 
-You can wrap existing I/O boundaries so they automatically attach lineage to their returns.
+`wrapFunction` is a convenience tool to reduce boilerplate. In a real codebase, you often have dozens of existing functions that process data. Instead of manually calling `transform()` after every function call, you can wrap them once.
+
+**The Scenario: An E-Commerce Checkout**
+Imagine calculating regional taxes. Without `wrapFunction`, you'd manually link inputs to outputs:
 
 ```typescript
-import { wrapFunction } from "data-lineage";
-
-const applyDiscount = wrapFunction((inv: { amount: number }) => {
-  return { amount: inv.amount - 5.0 };
-}, "apply_discount");
-
-const discounted = applyDiscount(tax);
+// The manual, tedious way
+const rawResult = calculateTax(incomingCart, userRegion);
+const finalCart = transform(rawResult, "Calculate Tax", [incomingCart, userRegion]);
 ```
+
+Here is the clean way using `wrapFunction`:
+
+```typescript
+import { track, wrapFunction, printLineage } from "data-lineage";
+
+// 1. Your existing function
+function calculateTax(cart: { total: number }, region: { code: string }) {
+  const rate = region.code === "NY" ? 0.08 : 0.00;
+  return { total: cart.total * (1 + rate) };
+}
+
+// 2. Create a "Tracked" version of the function ONCE
+const trackedCalculateTax = wrapFunction(calculateTax, "Calculate Regional Tax");
+
+const incomingCart = track({ total: 100.00 }, "checkout_api");
+const userRegion = track({ code: "NY" }, "database:users");
+
+// 3. Call the wrapped function normally!
+// It automatically records that `finalCart` came from `incomingCart` and `userRegion`.
+const finalCart = trackedCalculateTax(incomingCart, userRegion);
+
+console.log(printLineage(finalCart));
+```
+
+**Three things to know about `wrapFunction`:**
+1. **It ignores untracked inputs safely:** If you pass an untracked normal JS object as an argument, the wrapper simply ignores it and only links tracked parents to the result.
+2. **It handles third-party libraries:** You can wrap functions you didn't write. (e.g., `const trackedMerge = wrapFunction(lodash.merge, "Lodash Merge");`)
+3. **The Boundary Limitation:** It only traces the **boundary** of the function (what went in and what came out). It *does not* track internal local variables inside the function body.
 
 ### 4. Extracting Lineage from Errors
 
