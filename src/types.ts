@@ -1,5 +1,3 @@
-import * as crypto from "node:crypto";
-
 export const LINEAGE_SYMBOL = Symbol("lineage");
 
 export type NodeId = string;
@@ -20,5 +18,20 @@ export interface LineageRef {
 export type Tracked<T> = T extends object ? T & LineageRef : never;
 
 export function uuid(): NodeId {
-  return crypto.randomUUID();
+  return globalThis.crypto.randomUUID();
+}
+
+export interface LineageError extends Error {
+  __lineageParents?: NodeId[];
+  __operation?: string;
+}
+
+export function getErrorLineage(err: unknown): { parentIds: NodeId[], operation: string } | undefined {
+  if (err instanceof Error && "__lineageParents" in err) {
+    return {
+      parentIds: (err as LineageError).__lineageParents ?? [],
+      operation: (err as LineageError).__operation ?? "unknown"
+    };
+  }
+  return undefined;
 }

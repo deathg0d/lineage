@@ -20,6 +20,14 @@ function snapshot(value: unknown): unknown {
   }
 }
 
+function safeStringify(val: unknown): string {
+  try {
+    return JSON.stringify(val);
+  } catch {
+    return '"[circular]"';
+  }
+}
+
 function attachRef<T extends object>(value: T, id: NodeId): T {
   Object.defineProperty(value, LINEAGE_SYMBOL, {
     value: id,
@@ -132,7 +140,7 @@ export function printLineage(val: unknown): string {
     const time = new Date(node.timestamp).toISOString();
     const snap =
       node.valueSnapshot !== undefined
-        ? `  value: ${JSON.stringify(node.valueSnapshot)}`
+        ? `  value: ${safeStringify(node.valueSnapshot)}`
         : "";
     lines.push(`${step} ${label} @ ${time}  (id: ${node.id})${snap}`);
   }
