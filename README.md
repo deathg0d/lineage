@@ -18,8 +18,10 @@ Unlike standard tracing or logging, `data-lineage` decouples the graph from the 
 ## Features
 * 🛡️ **Memory Safe:** Powered by JS `FinalizationRegistry`. When your data is garbage collected, its lineage is iteratively, cleanly pruned from memory. No memory leaks, no recursive inline data structures.
 * 📸 **Value Snapshots:** Captures a shallow snapshot of the data at every transformation step so you know exactly *what* went wrong, not just *where*.
-### 3. Topological Traversal (The Output)
-Producing a human-readable DAG is critical. `printLineage` prints a compact, indented tree backwards in time (Output → Parent → Grandparent) exactly like `git log`:
+### 3. Depth-First Traversal (The Output)
+Producing a human-readable DAG is critical. `printLineage` prints a compact, indented depth-first tree backwards in time (Output → Parent → Grandparent) mirroring standard stack traces.
+
+Shared ancestors in diamond dependencies are printed once and then marked as `[shared node]` on subsequent visits to prevent infinite loops.
 
 ```text
 ↳ transform: calculate_total @ 2026-06-21...  value: {"amount":108} (id: 1a2b...)

@@ -10,6 +10,8 @@ function snapshot(value: unknown, redact?: (key: string, value: unknown) => unkn
   }
   try {
     const name = value.constructor?.name;
+    // Note: Object.keys only returns own enumerable properties. Properties 
+    // defined via getters on the class prototype will not be snapshotted.
     const keys = Object.keys(value);
     const limited = keys.slice(0, 10);
     const result: Record<string, unknown> = {};
@@ -87,7 +89,7 @@ export function transform<T extends object>(
 
 export function wrapFunction<Args extends unknown[], R extends object>(
   fn: (...args: Args) => R,
-  operationName: string = fn.name || "anonymous",
+  operationName?: string,
   options?: TrackOptions
 ): (...args: Args) => R;
 export function wrapFunction<Args extends unknown[], R extends object>(
@@ -104,7 +106,17 @@ export function wrapFunction<Args extends unknown[], R extends object>(
     try {
       const result = fn(...args);
       if (result instanceof Promise) {
-        return result.then(resolved => transform(resolved, operationName, args, options));
+        return result.then(
+          resolved => transform(resolved, operationName, args, options),
+          err => {
+            if (err instanceof Error) {
+              const parentIds = args.map(getNodeId).filter((id): id is NodeId => id !== undefined);
+              (err as any).__lineageParents = parentIds;
+              (err as any).__operation = operationName;
+            }
+            throw err;
+          }
+        );
       }
       return transform(result, operationName, args, options);
     } catch (err) {
