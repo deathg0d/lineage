@@ -287,6 +287,30 @@ describe("data-lineage", () => {
         assert.strictEqual(getErrorLineage(err), undefined);
       }
     });
+
+    it("Preserves `this` context when wrapping a class method", () => {
+      class Cart {
+        multiplier = 2;
+        calc(val: number) { return { total: val * this.multiplier }; }
+      }
+      const cart = new Cart();
+      cart.calc = wrapFunction(cart.calc, "calc_method");
+      const out = cart.calc(10);
+      assert.strictEqual(out.total, 20);
+      assert.strictEqual(getLineage(out)?.operation, "calc_method");
+    });
+
+    it("Does not overwrite deeper errors in nested wrappers", () => {
+      const inner = wrapFunction(() => { throw new Error("Boom"); }, "Inner");
+      const outer = wrapFunction(() => inner(), "Outer");
+      try {
+        outer();
+        assert.fail("Should throw");
+      } catch (err) {
+        const lineage = getErrorLineage(err);
+        assert.strictEqual(lineage?.operation, "Inner");
+      }
+    });
   });
 
   describe("4. wrapFunction() — async", () => {
@@ -730,6 +754,26 @@ describe("data-lineage", () => {
       assert.strictEqual(snap[1], "[Object]");
       assert.strictEqual(snap[2], "[Array]");
       assert.strictEqual(snap[3], "[Function]");
+    });
+
+    it("Truncates strings larger than 200 characters in snapshots", () => {
+      const longStr = "A".repeat(250);
+      const obj = track({ str: longStr }, "long_string");
+      const snap = getLineage(obj)?.valueSnapshot as any;
+      assert.ok(snap.str.endsWith("...[truncated]"));
+      assert.strictEqual(snap.str.length, 200 + "...[truncated]".length);
+    });
+
+    it("Formats Map, Set, and Date objects correctly instead of empty objects", () => {
+      const obj = track({
+        m: new Map([["a", 1]]),
+        s: new Set([1, 2, 3]),
+        d: new Date("2026-01-01T00:00:00Z")
+      }, "iterables");
+      const snap = getLineage(obj)?.valueSnapshot as any;
+      assert.deepStrictEqual(snap.m, { __type: "Map", size: 1 });
+      assert.deepStrictEqual(snap.s, { __type: "Set", size: 3 });
+      assert.deepStrictEqual(snap.d, { __type: "Date", value: "2026-01-01T00:00:00.000Z" });
     });
   });
 });
