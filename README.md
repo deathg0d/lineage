@@ -13,21 +13,12 @@ When something goes wrong, you call `printLineage(bad_value)` and get the comple
 ## The Core Insight
 **Data should know its own history the way Git commits know their parents.**
 
-Unlike standard tracing or logging, `data-lineage` decouples the graph from the value. Values simply carry an invisible, non-enumerable `Symbol` representing an ID. The actual lineage graph lives in a centralized, O(1) ref-counted `GraphStore`, making it entirely memory-safe for massive ETL, ML, and financial calculation pipelines.
+Unlike standard tracing or logging, `data-lineage` decouples the graph from the value. Values are tracked invisibly and immutably via a global `WeakMap`. The actual lineage graph lives in a centralized, O(1) ref-counted `GraphStore`, making it entirely memory-safe for massive ETL, ML, and financial calculation pipelines.
 
 ## Features
 * 🛡️ **Memory Safe:** Powered by JS `FinalizationRegistry`. When your data is garbage collected, its lineage is iteratively, cleanly pruned from memory. No memory leaks, no recursive inline data structures.
 * 📸 **Value Snapshots:** Captures a shallow snapshot of the data at every transformation step so you know exactly *what* went wrong, not just *where*.
-### 3. Depth-First Traversal (The Output)
-Producing a human-readable DAG is critical. `printLineage` prints a compact, indented depth-first tree backwards in time (Output → Parent → Grandparent) mirroring standard stack traces.
-
-Shared ancestors in diamond dependencies are printed once and then marked as `[shared node]` on subsequent visits to prevent infinite loops.
-
-```text
-↳ transform: calculate_total @ 2026-06-21...  value: {"amount":108} (id: 1a2b...)
-  ↳ source: checkout_api @ 2026-06-21...  value: {"total":100} (id: 3c4d...)
-  ↳ source: database:users @ 2026-06-21...  value: {"code":"NY"} (id: 5e6f...)
-```
+* 🔀 **Depth-First Traversal:** Produces human-readable, chronologically sorted histories (Output → Parent → Grandparent). Shared ancestors are cleanly deduplicated to prevent infinite loops.
 * 🔒 **Safe API:** Explicitly prevents "primitive boxing" bugs that plague other libraries. Cross-platform ready (Browser, Deno, Node) with `globalThis.crypto`.
 * 🛑 **Error Propagation:** Safely extracts lineage out of thrown exceptions.
 
