@@ -18,7 +18,14 @@ Unlike standard tracing or logging, `data-lineage` decouples the graph from the 
 ## Features
 * 🛡️ **Memory Safe:** Powered by JS `FinalizationRegistry`. When your data is garbage collected, its lineage is iteratively, cleanly pruned from memory. No memory leaks, no recursive inline data structures.
 * 📸 **Value Snapshots:** Captures a shallow snapshot of the data at every transformation step so you know exactly *what* went wrong, not just *where*.
-* 🔀 **Topological Traversal:** Produces human-readable, chronologically sorted histories (Source → Step 1 → Step 2 → Crash).
+### 3. Topological Traversal (The Output)
+Producing a human-readable DAG is critical. `printLineage` prints a compact, indented tree backwards in time (Output → Parent → Grandparent) exactly like `git log`:
+
+```text
+↳ transform: calculate_total @ 2026-06-21...  value: {"amount":108} (id: 1a2b...)
+  ↳ source: checkout_api @ 2026-06-21...  value: {"total":100} (id: 3c4d...)
+  ↳ source: database:users @ 2026-06-21...  value: {"code":"NY"} (id: 5e6f...)
+```
 * 🔒 **Safe API:** Explicitly prevents "primitive boxing" bugs that plague other libraries. Cross-platform ready (Browser, Deno, Node) with `globalThis.crypto`.
 * 🛑 **Error Propagation:** Safely extracts lineage out of thrown exceptions.
 
@@ -45,7 +52,7 @@ import { track, printLineage } from "data-lineage";
 const invoice = track({ amount: 42.50, currency: "EUR" }, "postgres:invoices");
 
 console.log(printLineage(invoice));
-// [1/1] source: postgres:invoices @ 2026-06-21T...  value: {"amount":42.5,"currency":"EUR"} (id: f4k2...)
+// ↳ source: postgres:invoices @ 2026-06-21T...  value: {"amount":42.5,"currency":"EUR"} (id: f4k2...)
 ```
 
 ### 2. Recording Transformations
@@ -58,8 +65,8 @@ import { transform } from "data-lineage";
 const tax = transform({ amount: invoice.amount * 0.2 }, "tax_calc", [invoice]);
 
 console.log(printLineage(tax));
-// [1/2] source: postgres:invoices @ 2026-06-21T...  value: {"amount":42.5,"currency":"EUR"}
-// [2/2] transform: tax_calc @ 2026-06-21T...  value: {"amount":8.5}
+// ↳ transform: tax_calc @ 2026-06-21T...  value: {"amount":8.5} (id: a1b2...)
+//   ↳ source: postgres:invoices @ 2026-06-21T...  value: {"amount":42.5,"currency":"EUR"} (id: f4k2...)
 ```
 
 ### 3. Wrapping Functions
@@ -97,6 +104,13 @@ const userRegion = track({ code: "NY" }, "database:users");
 const finalCart = trackedCalculateTax(incomingCart, userRegion);
 
 console.log(printLineage(finalCart));
+```
+
+**The Output:**
+```text
+↳ transform: Calculate Regional Tax @ 2026-06-21...  value: {"total":108} (id: 5e6f...)
+  ↳ source: checkout_api @ 2026-06-21...  value: {"total":100} (id: 1a2b...)
+  ↳ source: database:users @ 2026-06-21...  value: {"code":"NY"} (id: 3c4d...)
 ```
 
 **Three things to know about `wrapFunction`:**

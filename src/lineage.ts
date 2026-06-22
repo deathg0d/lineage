@@ -104,52 +104,43 @@ export function printLineage(val: unknown): string {
   const rootId = getNodeId(val);
   if (!rootId) return "No lineage found.";
 
-  const allNodes = new Map<NodeId, LineageNode>();
-  const queue: NodeId[] = [rootId];
-  while (queue.length > 0) {
-    const id = queue.pop()!;
-    if (allNodes.has(id)) continue;
-    const node = lookupNode(id);
-    if (!node) continue;
-    allNodes.set(id, node);
-    queue.push(...node.parentIds);
-  }
-
-  const sorted: LineageNode[] = [];
+  const lines: string[] = [];
   const visited = new Set<NodeId>();
-  const stack: Array<{ id: NodeId; phase: "enter" | "exit" }> = [
-    { id: rootId, phase: "enter" }
-  ];
+  const stack: Array<{ id: NodeId; depth: number }> = [{ id: rootId, depth: 0 }];
 
   while (stack.length > 0) {
-    const { id, phase } = stack.pop()!;
-    if (phase === "exit") {
-      sorted.push(allNodes.get(id)!);
+    const { id, depth } = stack.pop()!;
+    const indent = "  ".repeat(depth);
+
+    if (visited.has(id)) {
+      lines.push(`${indent}↳ [shared node: ${id}]`);
       continue;
     }
-    if (visited.has(id)) continue;
     visited.add(id);
-    const node = allNodes.get(id);
-    if (!node) continue;
-    stack.push({ id, phase: "exit" });
-    for (const parentId of node.parentIds) {
-      if (!visited.has(parentId)) stack.push({ id: parentId, phase: "enter" });
-    }
-  }
 
-  const lines: string[] = [];
-  for (let i = 0; i < sorted.length; i++) {
-    const node = sorted[i];
-    const step = `[${i + 1}/${sorted.length}]`;
+    const node = lookupNode(id);
+    if (!node) {
+      lines.push(`${indent}↳ [evicted: ${id}]`);
+      continue;
+    }
+
     const label = node.operation
       ? `transform: ${node.operation}`
       : `source: ${node.source}`;
+    
+    // Optional: Format timestamp nicely, or remove it if you prefer ultra-compact
     const time = new Date(node.timestamp).toISOString();
     const snap =
       node.valueSnapshot !== undefined
         ? `  value: ${safeStringify(node.valueSnapshot)}`
         : "";
-    lines.push(`${step} ${label} @ ${time}  (id: ${node.id})${snap}`);
+    
+    lines.push(`${indent}↳ ${label} @ ${time}  (id: ${node.id})${snap}`);
+
+    // Push parents in reverse order so they pop out in their original order
+    for (let i = node.parentIds.length - 1; i >= 0; i--) {
+      stack.push({ id: node.parentIds[i], depth: depth + 1 });
+    }
   }
 
   return lines.join("\n");
