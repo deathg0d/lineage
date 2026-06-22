@@ -4,6 +4,20 @@
   "description": "Zero-cost data provenance tracking",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/deathg0d/lineage.git"
+  },
+  "keywords": [
+    "provenance",
+    "data-lineage",
+    "tracing",
+    "dag",
+    "debugging",
+    "data-provenance"
+  ],
+  "author": "deathg0d",
+  "license": "MIT",
   "scripts": {
     "build": "tsc",
     "test": "node --test dist/tests/lineage.test.js",
