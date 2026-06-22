@@ -1,6 +1,6 @@
 # data-lineage
 
-**Data provenance as a zero-cost annotation layer.**
+**Data provenance as a low-overhead annotation layer.**
 
 Every piece of data in your system came from somewhere. A user input, an API response, a database row, a calculation. By the time it causes a problem — a wrong invoice, a corrupted record, a bad ML prediction — the origin is completely untraceable. Standard stack traces tell you *where the code crashed*, but not *how the data became poisoned*.
 

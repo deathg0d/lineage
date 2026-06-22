@@ -1,4 +1,4 @@
-import { LineageNode, NodeId, uuid } from "./types";
+import { LineageNode, NodeId, uuid, TrackOptions } from "./types";
 import { registerNode, lookupNode, registerTracked, getNodeId } from "./store";
 
 function snapshot(value: unknown, redact?: (key: string, value: unknown) => unknown): unknown {
@@ -86,6 +86,16 @@ export function transform<T extends object>(
 }
 
 export function wrapFunction<Args extends unknown[], R extends object>(
+  fn: (...args: Args) => R,
+  operationName: string = fn.name || "anonymous",
+  options?: TrackOptions
+): (...args: Args) => R;
+export function wrapFunction<Args extends unknown[], R extends object>(
+  fn: (...args: Args) => Promise<R>,
+  operationName?: string,
+  options?: TrackOptions
+): (...args: Args) => Promise<R>;
+export function wrapFunction<Args extends unknown[], R extends object>(
   fn: (...args: Args) => R | Promise<R>,
   operationName: string = fn.name || "anonymous",
   options?: TrackOptions
@@ -121,6 +131,7 @@ export function printLineage(val: unknown): string {
   const visited = new Set<NodeId>();
   const stack: Array<{ id: NodeId; depth: number }> = [{ id: rootId, depth: 0 }];
 
+  // Start building lines for topological traversal
   while (stack.length > 0) {
     const { id, depth } = stack.pop()!;
     const indent = "  ".repeat(depth);

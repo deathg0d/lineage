@@ -53,6 +53,7 @@ const registry = new FinalizationRegistry((id: NodeId) => {
 export function registerTracked(value: object, id: NodeId): void {
   if (trackingMap.has(value)) {
     // Unregister the previous token if this object is being re-tracked
+    // Note: NodeId strings act as their own unregister tokens here
     const prevToken = trackingMap.get(value);
     if (prevToken) {
       registry.unregister(prevToken);
