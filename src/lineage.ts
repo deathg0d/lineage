@@ -8,7 +8,13 @@ function snapshot(value: unknown, redact?: (key: string, value: unknown) => unkn
     if (rawVal !== null && (typeof rawVal === "object" || typeof rawVal === "function")) {
       if (Array.isArray(rawVal)) return "[Array]";
       if (typeof rawVal === "function") return "[Function]";
+      if (rawVal instanceof Map) return { __type: "Map", size: rawVal.size };
+      if (rawVal instanceof Set) return { __type: "Set", size: rawVal.size };
+      if (rawVal instanceof Date) return { __type: "Date", value: rawVal.toISOString() };
       return "[Object]";
+    }
+    if (typeof rawVal === "string" && rawVal.length > 200) {
+      return rawVal.slice(0, 200) + "...[truncated]";
     }
     return rawVal;
   };
@@ -119,14 +125,14 @@ export function wrapFunction<Args extends unknown[], R extends object>(
   operationName: string = fn.name || "anonymous",
   options?: TrackOptions
 ): (...args: Args) => R | Promise<R> {
-  return (...args: Args): R | Promise<R> => {
+  return function(this: any, ...args: Args): R | Promise<R> {
     try {
-      const result = fn(...args);
+      const result = fn.apply(this, args);
       if (result instanceof Promise) {
         return result.then(
           resolved => transform(resolved, operationName, args, options),
           err => {
-            if (err instanceof Error) {
+            if (err instanceof Error && !("__lineageParents" in err)) {
               const parentIds = args.map(getNodeId).filter((id): id is NodeId => id !== undefined);
               (err as any).__lineageParents = parentIds;
               (err as any).__operation = operationName;
@@ -137,7 +143,7 @@ export function wrapFunction<Args extends unknown[], R extends object>(
       }
       return transform(result, operationName, args, options);
     } catch (err) {
-      if (err instanceof Error) {
+      if (err instanceof Error && !("__lineageParents" in err)) {
         const parentIds = args.map(getNodeId).filter((id): id is NodeId => id !== undefined);
         (err as any).__lineageParents = parentIds;
         (err as any).__operation = operationName;
