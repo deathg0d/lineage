@@ -5,7 +5,7 @@ import {
   getErrorLineage, clearAll, evictBefore
 } from "../src/index";
 
-describe("lineage", () => {
+describe("data-lineage", () => {
   beforeEach(() => {
     clearAll();
   });

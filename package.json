@@ -1,12 +1,12 @@
 {
-  "name": "lineage",
+  "name": "data-lineage",
   "version": "1.0.0",
   "description": "Zero-cost data provenance tracking",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "repository": {
     "type": "git",
-    "url": "https://github.com/deathg0d/lineage.git"
+    "url": "https://github.com/deathg0d/data-lineage.git"
   },
   "keywords": [
     "provenance",

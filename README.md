@@ -1,10 +1,10 @@
-# lineage
+# data-lineage
 
 **Data provenance as a low-overhead annotation layer.**
 
 Every piece of data in your system came from somewhere. A user input, an API response, a database row, a calculation. By the time it causes a problem — a wrong invoice, a corrupted record, a bad ML prediction — the origin is completely untraceable. Standard stack traces tell you *where the code crashed*, but not *how the data became poisoned*.
 
-`lineage` attaches an invisible provenance chain to any value: where it was born, every transformation it passed through, every function that touched it, expressed as a compact directed acyclic graph (DAG) that travels with the value through your system.
+`data-lineage` attaches an invisible provenance chain to any value: where it was born, every transformation it passed through, every function that touched it, expressed as a compact directed acyclic graph (DAG) that travels with the value through your system.
 
 When something goes wrong, you call `printLineage(bad_value)` and get the complete, chronological causal biography of that specific piece of data.
 
@@ -13,7 +13,7 @@ When something goes wrong, you call `printLineage(bad_value)` and get the comple
 ## The Core Insight
 **Data should know its own history the way Git commits know their parents.**
 
-Unlike standard tracing or logging, `lineage` decouples the graph from the value. Values are tracked invisibly and immutably via a global `WeakMap`. The actual lineage graph lives in a centralized, O(1) ref-counted `GraphStore`, making it entirely memory-safe for massive ETL, ML, and financial calculation pipelines.
+Unlike standard tracing or logging, `data-lineage` decouples the graph from the value. Values are tracked invisibly and immutably via a global `WeakMap`. The actual lineage graph lives in a centralized, O(1) ref-counted `GraphStore`, making it entirely memory-safe for massive ETL, ML, and financial calculation pipelines.
 
 ## Features
 * 🛡️ **Memory Safe:** Powered by JS `FinalizationRegistry`. When your data is garbage collected, its lineage is iteratively, cleanly pruned from memory. No memory leaks, no recursive inline data structures.
@@ -27,7 +27,7 @@ Unlike standard tracing or logging, `lineage` decouples the graph from the value
 ## Installation
 
 ```bash
-npm install lineage
+npm install data-lineage
 ```
 
 ---
@@ -39,7 +39,7 @@ npm install lineage
 Whenever data enters your system, wrap it in `track()`. 
 
 ```typescript
-import { track, printLineage } from "lineage";
+import { track, printLineage } from "data-lineage";
 
 // 1. Data is born
 const invoice = track({ amount: 42.50, currency: "EUR" }, "postgres:invoices");
@@ -53,7 +53,7 @@ console.log(printLineage(invoice));
 Whenever data changes shape or calculates a new result, use `transform()`.
 
 ```typescript
-import { transform } from "lineage";
+import { transform } from "data-lineage";
 
 const tax = transform({ amount: invoice.amount * 0.2 }, "tax_calc", [invoice]);
 
@@ -78,7 +78,7 @@ const finalCart = transform(rawResult, "Calculate Tax", [incomingCart, userRegio
 Here is the clean way using `wrapFunction`:
 
 ```typescript
-import { track, wrapFunction, printLineage } from "lineage";
+import { track, wrapFunction, printLineage } from "data-lineage";
 
 // 1. Your existing function
 function calculateTax(cart: { total: number }, region: { code: string }) {
@@ -116,7 +116,7 @@ console.log(printLineage(finalCart));
 If a function throws an exception, the lineage context is automatically attached to the Error object so your global error handler can log it.
 
 ```typescript
-import { getErrorLineage } from "lineage";
+import { getErrorLineage } from "data-lineage";
 
 try {
   dangerousTransform(invoice);
@@ -146,7 +146,7 @@ const price = track({ value: 42.50 }, "api");
 ```
 
 ### 2. Zero-Mutation via `WeakMap`
-`lineage` uses a global `WeakMap` to store object IDs invisibly. This means **your objects are never mutated**.
+`data-lineage` uses a global `WeakMap` to store object IDs invisibly. This means **your objects are never mutated**.
 You can safely pass `Object.freeze(myConfig)` into `track()` and it will work natively without throwing errors or requiring cloned copies.
 
 ```typescript
@@ -173,7 +173,7 @@ This library uses `FinalizationRegistry` to automatically garbage collect DAG no
 However, `FinalizationRegistry` is not guaranteed to fire instantly, or at all in short-lived processes (like CLI scripts or Unit Tests). To prevent memory leaks between test runs, explicitly clear the store:
 
 ```typescript
-import { clearAll, evictBefore } from "lineage";
+import { clearAll, evictBefore } from "data-lineage";
 
 afterEach(() => {
   clearAll(); // Nukes the store between tests
