@@ -125,7 +125,7 @@ try {
 } catch (err) {
   const context = getErrorLineage(err);
   console.log("Failed operation:", context?.operation);
-  console.log("Input nodes:", context?.parentIds);
+  console.log("Input nodes:", context?.parents.map(p => p.id));
 }
 ```
 

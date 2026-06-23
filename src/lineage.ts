@@ -1,8 +1,12 @@
 import { LineageNode, uuid, TrackOptions } from "./types";
 
-const trackingMap = new WeakMap<object, LineageNode>();
+interface InternalNode extends LineageNode {
+  ownDepth: number;
+}
 
-function getNode(val: unknown): LineageNode | undefined {
+const trackingMap = new WeakMap<object, InternalNode>();
+
+function getNode(val: unknown): InternalNode | undefined {
   if (val !== null && (typeof val === "object" || typeof val === "function")) {
     return trackingMap.get(val as object);
   }
@@ -46,13 +50,16 @@ function snapshot(value: unknown, redact?: (key: string, value: unknown) => unkn
         result[k] = "[getter]";
       } else {
         const rawVal = (value as any)[k];
-        const redactedVal = redact ? redact(k, rawVal) : rawVal;
-        
-        // Break object references to prevent anchoring objects in the nodeStore,
-        // which would defeat the GC architecture.
-        // This runs AFTER redaction so the redact hook gets full context, and
-        // we guarantee no live objects leak into the snapshot.
-        result[k] = makeSafe(redactedVal);
+        if (redact) {
+          const redacted = redact(k, rawVal);
+          // If the developer's redact hook returns an object, we safely stringify it 
+          // to break references without losing their custom redaction data.
+          result[k] = (redacted !== null && (typeof redacted === "object" || typeof redacted === "function")) 
+            ? safeStringify(redacted) 
+            : redacted;
+        } else {
+          result[k] = makeSafe(rawVal);
+        }
       }
     }
     if (keys.length > 10) result["__truncated"] = `...(${keys.length - 10} more properties)`;
@@ -72,10 +79,11 @@ function safeStringify(val: unknown): string {
 
 function makeNode(
   source: string,
-  parents: LineageNode[],
+  parents: InternalNode[],
   operation?: string,
-  valueSnapshot?: unknown
-): LineageNode {
+  valueSnapshot?: unknown,
+  ownDepth: number = 0
+): InternalNode {
   return {
     id: uuid(),
     source,
@@ -83,6 +91,7 @@ function makeNode(
     parents,
     timestamp: Date.now(),
     valueSnapshot,
+    ownDepth,
   };
 }
 
@@ -92,7 +101,7 @@ function makeNode(
  * to the object will not be reflected in the lineage snapshot.
  */
 export function track<T extends object>(value: T, sourceName: string, options?: TrackOptions): T {
-  const node = makeNode(sourceName, [], undefined, snapshot(value, options?.redact));
+  const node = makeNode(sourceName, [], undefined, snapshot(value, options?.redact), 0);
   trackingMap.set(value, node);
   return value;
 }
@@ -109,9 +118,16 @@ export function transform<T extends object>(
 ): T {
   const parents = inputs
     .map(getNode)
-    .filter((n): n is LineageNode => n !== undefined);
+    .filter((n): n is InternalNode => n !== undefined);
 
-  const node = makeNode("transform", parents, operationName, snapshot(output, options?.redact));
+  // Each parent independently evaluated — no cross-contamination
+  const maxDepth = options?.maxDepth ?? 50;
+  const ownDepth = parents.length > 0
+    ? Math.max(...parents.map(p => p.ownDepth)) + 1
+    : 0;
+  const severedParents = parents.filter(p => p.ownDepth < maxDepth);
+
+  const node = makeNode("transform", severedParents, operationName, snapshot(output, options?.redact), ownDepth);
   trackingMap.set(output, node);
   return output;
 }
@@ -139,7 +155,7 @@ export function wrapFunction<Args extends unknown[], R extends object>(
           resolved => transform(resolved, operationName, args, options),
           err => {
             if (err instanceof Error && !("__lineageParents" in err)) {
-              const parents = args.map(getNode).filter((n): n is LineageNode => n !== undefined);
+              const parents = args.map(getNode).filter((n): n is InternalNode => n !== undefined);
               (err as any).__lineageParents = parents;
               (err as any).__operation = operationName;
             }
@@ -150,7 +166,7 @@ export function wrapFunction<Args extends unknown[], R extends object>(
       return transform(result, operationName, args, options);
     } catch (err) {
       if (err instanceof Error && !("__lineageParents" in err)) {
-        const parents = args.map(getNode).filter((n): n is LineageNode => n !== undefined);
+        const parents = args.map(getNode).filter((n): n is InternalNode => n !== undefined);
         (err as any).__lineageParents = parents;
         (err as any).__operation = operationName;
       }
