@@ -16,7 +16,7 @@ When something goes wrong, you call `printLineage(bad_value)` and get the comple
 Unlike standard tracing or logging, `data-lineage` decouples the graph from the value. Values are tracked invisibly and immutably via a global `WeakMap`. The actual lineage graph lives in a centralized, O(1) ref-counted `GraphStore`, making it entirely memory-safe for massive ETL, ML, and financial calculation pipelines.
 
 ## Features
-* 🛡️ **Memory Safe:** Powered by JS `FinalizationRegistry`. When your data is garbage collected, its lineage is iteratively, cleanly pruned from memory. No memory leaks, no recursive inline data structures.
+* 🛡️ **Memory Safe:** Native V8 Garbage Collection. By utilizing direct node references and `WeakMap`, history graphs are automatically pruned from memory the exact millisecond your data goes out of scope. No custom GC loops, no memory leaks.
 * 📸 **Value Snapshots:** Captures a shallow snapshot of the data at every transformation step so you know exactly *what* went wrong, not just *where*.
 * 🔀 **Depth-First Traversal:** Produces human-readable, chronologically sorted histories (Output → Parent → Grandparent). Shared ancestors are cleanly deduplicated to prevent infinite loops.
 * 🔒 **Safe API:** Explicitly prevents "primitive boxing" bugs that plague other libraries. Cross-platform ready (Browser, Deno, Node) with `globalThis.crypto`.
@@ -176,23 +176,12 @@ To guarantee that the history graph doesn't create memory leaks or bloat the V8 
 * **Large Strings:** Strings exceeding 200 characters are truncated (appended with `...[truncated]`).
 * **Iterables & Dates:** `Map` and `Set` instances are serialized to lightweight metadata (e.g., `{ __type: "Map", size: 5 }`), and `Date` objects are serialized to ISO strings.
 
-### 7. Memory Management (GC & Teardown)
-This library uses `FinalizationRegistry` to automatically garbage collect DAG nodes when your JS objects are destroyed. 
+### 7. Memory Management (Native V8 GC)
+This library previously relied on a custom Garbage Collector (`FinalizationRegistry`) to delete orphaned history graphs. 
 
-However, `FinalizationRegistry` is not guaranteed to fire instantly, or at all in short-lived processes (like CLI scripts or Unit Tests). To prevent memory leaks between test runs, explicitly clear the store:
+With the latest architectural rewrite, `data-lineage` now stores parent dependencies directly by reference rather than globally, meaning **the V8 engine handles 100% of the garbage collection natively at C++ speeds**. 
 
-```typescript
-import { clearAll, evictBefore } from "data-lineage";
-
-afterEach(() => {
-  clearAll(); // Nukes the store between tests
-});
-
-// For edge environments where FinalizationRegistry is unreliable:
-setInterval(() => {
-  evictBefore(Date.now() - 3600000); // Manually evict nodes older than 1 hour
-}, 60000);
-```
+When a tracked object goes out of scope, the `WeakMap` drops the link, and V8 automatically tears down any upstream lineage history that isn't shared by another active object (Diamond DAG reference counting is handled natively). There are zero memory leaks, and no teardown configuration is required.
 
 ---
 

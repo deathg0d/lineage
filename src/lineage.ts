@@ -1,5 +1,13 @@
-import { LineageNode, NodeId, uuid, TrackOptions } from "./types";
-import { registerNode, lookupNode, registerTracked, getNodeId } from "./store";
+import { LineageNode, uuid, TrackOptions } from "./types";
+
+const trackingMap = new WeakMap<object, LineageNode>();
+
+function getNode(val: unknown): LineageNode | undefined {
+  if (val !== null && (typeof val === "object" || typeof val === "function")) {
+    return trackingMap.get(val as object);
+  }
+  return undefined;
+}
 
 function snapshot(value: unknown, redact?: (key: string, value: unknown) => unknown): unknown {
   if (value === null || (typeof value !== "object" && typeof value !== "function")) return value;
@@ -41,7 +49,7 @@ function snapshot(value: unknown, redact?: (key: string, value: unknown) => unkn
         const redactedVal = redact ? redact(k, rawVal) : rawVal;
         
         // Break object references to prevent anchoring objects in the nodeStore,
-        // which would defeat the FinalizationRegistry GC architecture.
+        // which would defeat the GC architecture.
         // This runs AFTER redaction so the redact hook gets full context, and
         // we guarantee no live objects leak into the snapshot.
         result[k] = makeSafe(redactedVal);
@@ -64,7 +72,7 @@ function safeStringify(val: unknown): string {
 
 function makeNode(
   source: string,
-  parentIds: NodeId[],
+  parents: LineageNode[],
   operation?: string,
   valueSnapshot?: unknown
 ): LineageNode {
@@ -72,7 +80,7 @@ function makeNode(
     id: uuid(),
     source,
     operation,
-    parentIds,
+    parents,
     timestamp: Date.now(),
     valueSnapshot,
   };
@@ -85,8 +93,7 @@ function makeNode(
  */
 export function track<T extends object>(value: T, sourceName: string, options?: TrackOptions): T {
   const node = makeNode(sourceName, [], undefined, snapshot(value, options?.redact));
-  registerNode(node);
-  registerTracked(value, node.id);
+  trackingMap.set(value, node);
   return value;
 }
 
@@ -100,13 +107,12 @@ export function transform<T extends object>(
   inputs: unknown[],
   options?: TrackOptions
 ): T {
-  const parentIds = inputs
-    .map(getNodeId)
-    .filter((id): id is NodeId => id !== undefined);
+  const parents = inputs
+    .map(getNode)
+    .filter((n): n is LineageNode => n !== undefined);
 
-  const node = makeNode("transform", parentIds, operationName, snapshot(output, options?.redact));
-  registerNode(node);
-  registerTracked(output, node.id);
+  const node = makeNode("transform", parents, operationName, snapshot(output, options?.redact));
+  trackingMap.set(output, node);
   return output;
 }
 
@@ -133,8 +139,8 @@ export function wrapFunction<Args extends unknown[], R extends object>(
           resolved => transform(resolved, operationName, args, options),
           err => {
             if (err instanceof Error && !("__lineageParents" in err)) {
-              const parentIds = args.map(getNodeId).filter((id): id is NodeId => id !== undefined);
-              (err as any).__lineageParents = parentIds;
+              const parents = args.map(getNode).filter((n): n is LineageNode => n !== undefined);
+              (err as any).__lineageParents = parents;
               (err as any).__operation = operationName;
             }
             throw err;
@@ -144,8 +150,8 @@ export function wrapFunction<Args extends unknown[], R extends object>(
       return transform(result, operationName, args, options);
     } catch (err) {
       if (err instanceof Error && !("__lineageParents" in err)) {
-        const parentIds = args.map(getNodeId).filter((id): id is NodeId => id !== undefined);
-        (err as any).__lineageParents = parentIds;
+        const parents = args.map(getNode).filter((n): n is LineageNode => n !== undefined);
+        (err as any).__lineageParents = parents;
         (err as any).__operation = operationName;
       }
       throw err;
@@ -154,37 +160,27 @@ export function wrapFunction<Args extends unknown[], R extends object>(
 }
 
 export function getLineage(val: unknown): LineageNode | undefined {
-  const id = getNodeId(val);
-  return id ? lookupNode(id) : undefined;
+  return getNode(val);
 }
 
 export function printLineage(val: unknown): string {
-  const rootId = getNodeId(val);
-  if (!rootId) return "No lineage found.";
-
-  const rootNode = lookupNode(rootId);
+  const rootNode = getNode(val);
   if (!rootNode) return "No lineage found.";
 
   const lines: string[] = [];
-  const visited = new Set<NodeId>();
-  const stack: Array<{ id: NodeId; depth: number }> = [{ id: rootId, depth: 0 }];
+  const visited = new Set<string>();
+  const stack: Array<{ node: LineageNode; depth: number }> = [{ node: rootNode, depth: 0 }];
 
   // Start building lines for topological traversal
   while (stack.length > 0) {
-    const { id, depth } = stack.pop()!;
+    const { node, depth } = stack.pop()!;
     const indent = "  ".repeat(depth);
 
-    if (visited.has(id)) {
-      lines.push(`${indent}↳ [shared node: ${id}]`);
+    if (visited.has(node.id)) {
+      lines.push(`${indent}↳ [shared node: ${node.id}]`);
       continue;
     }
-    visited.add(id);
-
-    const node = lookupNode(id);
-    if (!node) {
-      lines.push(`${indent}↳ [evicted: ${id}]`);
-      continue;
-    }
+    visited.add(node.id);
 
     const label = node.operation
       ? `transform: ${node.operation}`
@@ -200,8 +196,8 @@ export function printLineage(val: unknown): string {
     lines.push(`${indent}↳ ${label} @ ${time}  (id: ${node.id})${snap}`);
 
     // Push parents in reverse order so they pop out in their original order
-    for (let i = node.parentIds.length - 1; i >= 0; i--) {
-      stack.push({ id: node.parentIds[i], depth: depth + 1 });
+    for (let i = node.parents.length - 1; i >= 0; i--) {
+      stack.push({ node: node.parents[i], depth: depth + 1 });
     }
   }
 

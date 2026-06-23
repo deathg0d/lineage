@@ -1,15 +1,13 @@
-export type NodeId = string;
-
 export interface LineageNode {
-  id: NodeId;
+  id: string;
   source: string;
   operation?: string;
-  parentIds: NodeId[];
+  parents: LineageNode[];
   timestamp: number;
   valueSnapshot?: unknown;
 }
 
-export function uuid(): NodeId {
+export function uuid(): string {
   return globalThis.crypto.randomUUID();
 }
 
@@ -18,14 +16,14 @@ export interface TrackOptions {
 }
 
 export interface LineageError extends Error {
-  __lineageParents?: NodeId[];
+  __lineageParents?: LineageNode[];
   __operation?: string;
 }
 
-export function getErrorLineage(err: unknown): { parentIds: NodeId[], operation?: string } | undefined {
+export function getErrorLineage(err: unknown): { parents: LineageNode[], operation?: string } | undefined {
   if (err instanceof Error && "__lineageParents" in err) {
     return {
-      parentIds: (err as LineageError).__lineageParents ?? [],
+      parents: (err as LineageError).__lineageParents ?? [],
       operation: (err as LineageError).__operation
     };
   }
