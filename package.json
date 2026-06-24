@@ -1,6 +1,6 @@
 {
   "name": "data-lineage",
-  "version": "1.0.3",
+  "version": "2.0.0",
   "description": "Zero-cost data provenance tracking",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
