@@ -143,9 +143,9 @@ Example:
 ↳ transform: calculate_final_invoice @ 2026-06-22T13:42...  value: {"total": NaN}
   ↳ transform: apply_discount @ 2026-06-22T13:42...  value: {"total": undefined} 
     ↳ source: api:shopping_cart @ 2026-06-22T13:42...  value: {"items": 2}
-  ↳ source: db:user_profile @ 2026-06-22T13:42...  value: {"region": "NY", "discount": "BOGUS_STRING"}
+    ↳ source: db:user_profile @ 2026-06-22T13:42...  value: {"region": "NY", "discount": "BOGUS_STRING"}
 ```
-*(In this example, the `db:user_profile` returned a bad discount string, which cascaded into an `undefined` total, eventually crashing the final calculation with `NaN`)*
+*(In this example, the `db:user_profile` returned a bad discount string, which caused `apply_discount` to fail and return an `undefined` total, eventually crashing the final calculation with `NaN`)*
 
 ---
 
